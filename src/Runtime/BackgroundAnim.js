@@ -13,14 +13,14 @@ const NOISE_TIME_SCALE = 6000;
 
 const FLUID_FORCE_STRENGTH = .3;
 
-const SPRING_MAX_FORCE = .6;
+const SPRING_MAX_FORCE = 1.5;
 const SPRING_MIN_DISTANCE = 20;
 const SPRING_MAX_DISTANCE = 100;
 
 const DAMPING = 0.97;
 
-const MOUSE_STRENGTH = 10;
-const MOUSE_EFFECT_DISTANCE = 150;
+const MOUSE_STRENGTH = 6;
+const MOUSE_EFFECT_DISTANCE = 100;
 
 const directions = 
 {
@@ -89,14 +89,10 @@ class Vertex
         let deltaY = this.baseCoords.y - this.currentCoords.y;
 
         let springDirection = Vector.degrees(Math.atan2(deltaY, deltaX));
-        let distance = Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
+        let distance = Math.hypot(deltaX, deltaY);
         let springForceSlope = (distance - SPRING_MIN_DISTANCE)/(SPRING_MAX_DISTANCE - SPRING_MIN_DISTANCE);
+        springForceSlope = Math.max(0, Math.min(1, springForceSlope));
         let springForceStrength = smooth(springForceSlope) * SPRING_MAX_FORCE;
-        
-        if(distance > SPRING_MAX_DISTANCE)
-        {
-            springForceStrength = SPRING_MAX_FORCE;
-        }
 
         let springForceVector = new Vector(springDirection, springForceStrength);
 
@@ -104,17 +100,12 @@ class Vertex
 
         this.velocityVector = Vector.sumVectors(this.velocityVector, totalForceVector);
 
-        this.velocityVector.strength *= DAMPING;
-
         if(this.mouseForceVector.strength > 0)
         {
             this.velocityVector = Vector.sumVectors(this.velocityVector, this.mouseForceVector)
         }
 
-        if(this.velocityVector.strength > MAX_VELOCITY)
-        {
-            this.velocityVector.strength = MAX_VELOCITY;
-        }
+        this.velocityVector.strength *= DAMPING;
 
         if(distance > SPRING_MAX_DISTANCE)
         {
@@ -128,6 +119,11 @@ class Vertex
                 this.velocityVector = Vector.sumVectors(this.velocityVector,
                                 new Vector(outwardVector.angle + 180, outwardSpeed));
             }
+        }
+
+        if(this.velocityVector.strength > MAX_VELOCITY)
+        {
+            this.velocityVector.strength = MAX_VELOCITY;
         }
     }
 
@@ -391,7 +387,7 @@ function getDistance(x1,y1,x2,y2)
 {
     let deltaX = x2 - x1;
     let deltaY = y2 - y1;
-    return Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
+    return Math.hypot(deltaX, deltaY);
 }
 
 function smooth(t)
