@@ -6,13 +6,21 @@ const LINE_WIDTH = 2;
 const LINE_GLOW_RADIUS = 2;
 const LINE_COLOR = '#51d448';
 
-const NOISE_GRID_SIZE = 400;
-const NOISE_TIME_SCALE = 8000;
+const MAX_VELOCITY = 8;
 
-const FLUID_FORCE_STRENGTH = .2;
-const SPRING_FORCE_STRENGTH = .08;
-const SPRING_FACTOR = .2;
+const NOISE_GRID_SIZE = 400;
+const NOISE_TIME_SCALE = 6000;
+
+const FLUID_FORCE_STRENGTH = .3;
+
+const SPRING_MAX_FORCE = .6;
+const SPRING_MIN_DISTANCE = 20;
+const SPRING_MAX_DISTANCE = 100;
+
 const DAMPING = 0.97;
+
+const MOUSE_STRENGTH = 10;
+const MOUSE_EFFECT_DISTANCE = 150;
 
 const directions = 
 {
@@ -35,6 +43,8 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
+window.addEventListener("mousemove", event => {mouseOver(event)});
+
 class Vertex
 {
     constructor(x, y, z=0)
@@ -50,6 +60,8 @@ class Vertex
             y: this.baseCoords.y,
             z: this.baseCoords.z,
         }
+
+        this.mouseForceVector = new Vector(0, 0);
 
         this.velocityVector = new Vector(0, 0);
     }
@@ -78,14 +90,45 @@ class Vertex
 
         let springDirection = Vector.degrees(Math.atan2(deltaY, deltaX));
         let distance = Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
-        let springForce = SPRING_FORCE_STRENGTH + SPRING_FACTOR * distance/100;
-        let springForceVector = new Vector(springDirection, springForce);
+        let springForceSlope = (distance - SPRING_MIN_DISTANCE)/(SPRING_MAX_DISTANCE - SPRING_MIN_DISTANCE);
+        let springForceStrength = smooth(springForceSlope) * SPRING_MAX_FORCE;
+        
+        if(distance > SPRING_MAX_DISTANCE)
+        {
+            springForceStrength = SPRING_MAX_FORCE;
+        }
+
+        let springForceVector = new Vector(springDirection, springForceStrength);
 
         let totalForceVector = Vector.sumVectors(flowForceVector, springForceVector);
 
         this.velocityVector = Vector.sumVectors(this.velocityVector, totalForceVector);
 
         this.velocityVector.strength *= DAMPING;
+
+        if(this.mouseForceVector.strength > 0)
+        {
+            this.velocityVector = Vector.sumVectors(this.velocityVector, this.mouseForceVector)
+        }
+
+        if(this.velocityVector.strength > MAX_VELOCITY)
+        {
+            this.velocityVector.strength = MAX_VELOCITY;
+        }
+
+        if(distance > SPRING_MAX_DISTANCE)
+        {
+            let outwardVector = Vector.fromComponents(-deltaX, -deltaY);
+            outwardVector.strength = 1;
+
+            let outwardSpeed = Vector.dotProduct(this.velocityVector, outwardVector);
+
+            if(outwardSpeed > 0)
+            {
+                this.velocityVector = Vector.sumVectors(this.velocityVector,
+                                new Vector(outwardVector.angle + 180, outwardSpeed));
+            }
+        }
     }
 
     updatePosition(deltaTime)
@@ -303,7 +346,8 @@ class PerlinNoise
         let indexX = Math.floor(x/NOISE_GRID_SIZE);
         let indexY = Math.floor(y/NOISE_GRID_SIZE);
         let indexT = 0;
-        let weightedScalar = []
+        let weightedScalar = [];
+
         for (let iX = indexX; iX <= indexX + 1; iX++)
         {
             for (let iY = indexY; iY <= indexY+1; iY++)
@@ -343,9 +387,48 @@ class PerlinNoise
     }
 }
 
+function getDistance(x1,y1,x2,y2)
+{
+    let deltaX = x2 - x1;
+    let deltaY = y2 - y1;
+    return Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
+}
+
 function smooth(t)
 {
     return 6*Math.pow(t, 5) - 15*Math.pow(t, 4) + 10*Math.pow(t, 3);
+}
+
+/**
+ * 
+ * @param {MouseEvent} event 
+ */
+function mouseOver(event)
+{
+    let mouseX = event.clientX;
+    let mouseY = event.clientY;
+
+    vertices.forEach(vertex =>
+    {
+        let vertexX = vertex.currentCoords.x;
+        let vertexY = vertex.currentCoords.y;
+
+        let distance = getDistance(mouseX, mouseY, vertexX, vertexY)
+        if(distance < MOUSE_EFFECT_DISTANCE)
+        {
+            let slope = -(MOUSE_STRENGTH/MOUSE_EFFECT_DISTANCE)*distance + MOUSE_STRENGTH;
+
+            let angle = Vector.degrees(Math.atan2(vertexY - mouseY, vertexX - mouseX));
+
+            vertex.mouseForceVector = new Vector(angle, slope);
+        }
+        else{
+            vertex.mouseForceVector.strength = 0;
+        }
+    })
+
+
+
 }
 
 function updateState(timestamp, deltaTime)
