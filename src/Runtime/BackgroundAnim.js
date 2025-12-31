@@ -1,3 +1,5 @@
+///fix math so that Y is down consistently, some math is Y is up.
+
 const VERT_RADIUS = 5;
 const VERT_GLOW_RADIUS = 10;
 const VERT_BASE_COLOR = '#289120';
@@ -131,6 +133,20 @@ class Vertex
     {
         this.currentCoords.x += this.velocityVector.getComponentX()*deltaTime/1000;
         this.currentCoords.y += this.velocityVector.getComponentY()*deltaTime/1000;
+
+        let deltaX = this.currentCoords.x - this.baseCoords.x;
+        let deltaY = this.currentCoords.y - this.baseCoords.y;
+
+        let distanceVector = Vector.fromComponents(deltaX, deltaY);
+
+        if(distanceVector.strength > SPRING_MAX_DISTANCE)
+        {
+            distanceVector.strength = SPRING_MAX_DISTANCE;
+            this.currentCoords.x = this.baseCoords.x + distanceVector.getComponentX();
+
+            //math-space y is up and screenspace y is down. invert this after fixing:
+            this.currentCoords.y = this.baseCoords.y - distanceVector.getComponentY();
+        }
     }
 }
 
