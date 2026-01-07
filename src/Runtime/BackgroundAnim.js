@@ -145,7 +145,7 @@ class Vertex
             this.currentCoords.x = this.baseCoords.x + distanceVector.getComponentX();
 
             //math-space y is up and screenspace y is down. invert this after fixing:
-            this.currentCoords.y = this.baseCoords.y - distanceVector.getComponentY();
+            this.currentCoords.y = this.baseCoords.y + distanceVector.getComponentY();
         }
     }
 }
@@ -280,7 +280,7 @@ class Vector
 
     getComponentY()
     {
-        return -this.strength * Math.sin(Vector.radians(this.angle))
+        return this.strength * Math.sin(Vector.radians(this.angle))
     }
 }
 
@@ -368,9 +368,9 @@ class PerlinNoise
                 {
                     let corner = this.lattice[iX][iY][iT];
 
-                    let dx = x - corner.x;
-                    let dy = y - corner.y;
-                    let dt = time - corner.time;
+                    let dx = Math.abs(x - corner.x);
+                    let dy = Math.abs(y - corner.y);
+                    let dt = Math.abs(time - corner.time);
 
                     let distanceVector = Vector.fromComponents(dx, dy);
 
@@ -392,6 +392,11 @@ class PerlinNoise
         }
 
         let weightSum = weightedScalar.reduce((a,b) => a + Math.abs(b), 0);
+        if(weightSum === 0)
+        {
+            return 0;
+        }
+
         let finalScalar = weightedScalar.reduce((a,b) => a + b, 0) / weightSum;
         
         return finalScalar;
