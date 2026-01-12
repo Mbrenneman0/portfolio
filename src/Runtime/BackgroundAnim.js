@@ -1,3 +1,9 @@
+/*
+TODO
+add resize capability
+filter vertices that are off screen to reduce cpu load
+*/
+
 import {Utils} from "./modules/utils.js";
 import {Vector} from "./modules/vector.js";
 import {PerlinNoise} from "./modules/perlinnoise.js";
@@ -16,10 +22,11 @@ const NOISE_GRID_SIZE = 400;
 const NOISE_TIME_SCALE = 6000;
 
 const FLUID_FORCE_STRENGTH = .3;
+const FLUID_SECONDARY_STRENGTH = .25;
 
-const SPRING_MAX_FORCE = 1.5;
-const SPRING_MIN_DISTANCE = 20;
-const SPRING_MAX_DISTANCE = 100;
+const SPRING_MAX_FORCE = 5;
+const SPRING_MIN_DISTANCE = 10;
+const SPRING_MAX_DISTANCE = 50;
 
 const DAMPING = 0.97;
 
@@ -44,8 +51,8 @@ const canvas = document.getElementById("bg-anim");
  */
 const ctx = canvas.getContext("2d");
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+canvas.width = window.innerWidth; //change to document width later
+canvas.height = window.innerHeight; //change to document height later
 
 window.addEventListener("mousemove", event => {mouseOver(event)});
 
@@ -86,8 +93,12 @@ class Vertex
     updateForce(timestamp)
     {
         let noiseSample = perlin.sample(this.baseCoords.x, this.baseCoords.y, timestamp);
-        let flowForceDirection = (noiseSample * 180) + 180
+        let flowForceDirection = (noiseSample * 180) + 180;
         let flowForceVector = new Vector(flowForceDirection, FLUID_FORCE_STRENGTH);
+
+        noiseSample = perlinSecondary.sample(this.baseCoords.x, this.baseCoords.y, timestamp);
+        let flowSecondaryDirection = (noiseSample * 180) + 180;
+        let flowSecondaryVector = new Vector(flowSecondaryDirection, FLUID_SECONDARY_STRENGTH);
 
         let deltaX = this.baseCoords.x - this.currentCoords.x;
         let deltaY = this.baseCoords.y - this.currentCoords.y;
@@ -100,7 +111,7 @@ class Vertex
 
         let springForceVector = new Vector(springDirection, springForceStrength);
 
-        let totalForceVector = Vector.sumVectors(flowForceVector, springForceVector);
+        let totalForceVector = Vector.sumVectors(flowForceVector, flowSecondaryVector, springForceVector);
 
         this.velocityVector = Vector.sumVectors(this.velocityVector, totalForceVector);
 
@@ -217,6 +228,11 @@ function updateState(timestamp, deltaTime)
         perlin.newTimeLayer();
     }
 
+    while(timestamp > perlinSecondary.getEndTime())
+    {
+        perlinSecondary.newTimeLayer();
+    }
+
     vertices.forEach(vertex =>
     {
         vertex.updateForce(timestamp);
@@ -276,5 +292,6 @@ let tris =
     ]
 
 const perlin = new PerlinNoise(canvas.width, canvas.height, NOISE_GRID_SIZE, NOISE_TIME_SCALE);
+const perlinSecondary = new PerlinNoise(canvas.width, canvas.height, NOISE_GRID_SIZE/2, NOISE_TIME_SCALE/4)
 
 main(document.timeline.currentTime);
