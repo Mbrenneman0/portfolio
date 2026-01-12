@@ -1,4 +1,6 @@
-///fix math so that Y is down consistently, some math is Y is up.
+import {Utils} from "./modules/utils.js";
+import {Vector} from "./modules/vector.js";
+import {PerlinNoise} from "./modules/perlinnoise.js";
 
 const VERT_RADIUS = 5;
 const VERT_GLOW_RADIUS = 10;
@@ -94,7 +96,7 @@ class Vertex
         let distance = Math.hypot(deltaX, deltaY);
         let springForceSlope = (distance - SPRING_MIN_DISTANCE)/(SPRING_MAX_DISTANCE - SPRING_MIN_DISTANCE);
         springForceSlope = Math.max(0, Math.min(1, springForceSlope));
-        let springForceStrength = smooth(springForceSlope) * SPRING_MAX_FORCE;
+        let springForceStrength = Utils.smooth(springForceSlope) * SPRING_MAX_FORCE;
 
         let springForceVector = new Vector(springDirection, springForceStrength);
 
@@ -179,243 +181,6 @@ class Triangle
     }
 }
 
-class Vector
-{
-    /**
-     * 
-     * @param {*} dir - direction in degrees
-     * @param {*} strength - length of the vector
-     */
-    constructor(dir, strength)
-    {
-        this.angle = Vector.#normalizeAngle(dir);
-        this.strength = strength;
-    }
-
-    static fromComponents(x, y)
-    {
-        let angle = Vector.degrees(Math.atan2(y,x))
-        let strength = Math.hypot(x,y);
-        return new Vector(angle, strength);
-    }
-
-    /**
-     * 
-     * @param  {...Vector} vectors 
-     */
-    static sumVectors(...vectors)
-    {
-        let totalX = 0;
-        let totalY = 0;
-
-        vectors.forEach(vector =>
-        {
-            totalX += vector.getComponentX();
-            totalY += vector.getComponentY();
-        })
-
-        return Vector.fromComponents(totalX, totalY);
-    }
-
-    /**
-     * Ensures any input is normalized to a value between 0 and 359
-     * @param {Number} inputAngle - any number
-     * @returns {Number} Normalized angle value
-     */
-    static #normalizeAngle(inputAngle)
-    {
-        let angle = inputAngle % 360;
-        if(angle < 0)
-        {
-            angle += 360;
-        }
-
-        return angle;
-    }
-
-    static translateAngle(angle1, angle2)
-    {
-        let newAngle = angle1+angle2;
-        newAngle = this.#normalizeAngle(newAngle);
-        return newAngle;
-    }
-
-    /**
-     * 
-     * @param  {Vector} vector1
-     * @param  {Vector} vector2
-     */
-    static dotProduct(vector1, vector2)
-    {
-        let angleDiff = Math.abs(vector1.angle - vector2.angle)
-        angleDiff = Math.min(angleDiff, 360-angleDiff)
-        return vector1.strength * vector2.strength * Math.cos(Vector.radians(angleDiff))
-    }
-
-    #mirrorAngleX(angle)
-    {
-        return Vector.#normalizeAngle(360-angle)
-    }
-
-    #mirrorAngleY(angle)
-    {
-        return Vector.#normalizeAngle(180-angle);
-    }
-
-    static radians(degrees)
-    {
-        return degrees * (Math.PI/180)
-    }
-
-    static degrees(radians)
-    {
-        return radians / (Math.PI/180)
-    }
-
-
-    getComponentX()
-    {
-        return this.strength * Math.cos(Vector.radians(this.angle))
-    }
-
-    getComponentY()
-    {
-        return this.strength * Math.sin(Vector.radians(this.angle))
-    }
-}
-
-class PerlinNoise
-{
-    static LatticePoint = class
-    {
-        constructor(x, y, time, vector)
-        {
-            this.x = x
-            this.y = y
-            this.time = time
-            this.vector = vector
-        }
-    }
-
-    constructor()
-    {
-        this.lattice = this.createLattice()
-    }
-
-    createLattice()
-    {
-        let lattice = [];
-
-        const cols = Math.ceil(canvas.width / NOISE_GRID_SIZE) + 1;
-        const rows = Math.ceil(canvas.height / NOISE_GRID_SIZE) + 1;
-
-        for(let x = 0; x < cols; x++)
-        {
-            lattice[x] = [];
-            for(let y = 0; y < rows; y++)
-            {
-                lattice[x][y] = [];
-                for(let time = 0; time <= 1; time++)
-                {
-                    lattice[x][y][time] = new PerlinNoise.LatticePoint(
-                        x       * NOISE_GRID_SIZE,
-                        y       * NOISE_GRID_SIZE,
-                        time    * NOISE_TIME_SCALE,
-                        new Vector(Math.floor(Math.random()*360), 1)
-                    )
-                }
-            }
-        }
-
-    return lattice;
-    }
-
-    getEndTime()
-    {
-        return this.lattice[0][0][1].time
-    }
-
-    newTimeLayer()
-    {
-        this.lattice.forEach(col =>
-            {
-                col.forEach(colRow =>
-                {
-                    let temp = colRow[1]
-                    colRow[0] = temp;
-                    colRow[1] = new PerlinNoise.LatticePoint(
-                        temp.x,
-                        temp.y,
-                        temp.time + NOISE_TIME_SCALE,
-                        new Vector(Math.floor(Math.random()*360), 1)
-                    )
-                })
-            })
-    }
-
-    sample(x, y, time)
-    {
-        let indexX = Math.floor(x/NOISE_GRID_SIZE);
-        let indexY = Math.floor(y/NOISE_GRID_SIZE);
-        let indexT = 0;
-        let weightedScalar = [];
-
-        for (let iX = indexX; iX <= indexX + 1; iX++)
-        {
-            for (let iY = indexY; iY <= indexY+1; iY++)
-            {
-                for(let iT = indexT; iT <= indexT + 1; iT++)
-                {
-                    let corner = this.lattice[iX][iY][iT];
-
-                    let dx = Math.abs(x - corner.x);
-                    let dy = Math.abs(y - corner.y);
-                    let dt = Math.abs(time - corner.time);
-
-                    let distanceVector = Vector.fromComponents(dx, dy);
-
-                    let dotProduct = Vector.dotProduct(distanceVector, corner.vector);
-
-                    let fractionalDX = dx/NOISE_GRID_SIZE;
-                    let fractionalDY = dy/NOISE_GRID_SIZE;
-                    let fractionalDT = dt/NOISE_TIME_SCALE;
-
-                    let smoothX = smooth(fractionalDX);
-                    let smoothY = smooth(fractionalDY);
-                    let smoothT = smooth(fractionalDT);
-
-                    let weight = (smoothX+smoothY+smoothT)/3
-
-                    weightedScalar.push(dotProduct*weight);
-                }
-            }
-        }
-
-        let weightSum = weightedScalar.reduce((a,b) => a + Math.abs(b), 0);
-        if(weightSum === 0)
-        {
-            return 0;
-        }
-
-        let finalScalar = weightedScalar.reduce((a,b) => a + b, 0) / weightSum;
-        
-        return finalScalar;
-
-    }
-}
-
-function getDistance(x1,y1,x2,y2)
-{
-    let deltaX = x2 - x1;
-    let deltaY = y2 - y1;
-    return Math.hypot(deltaX, deltaY);
-}
-
-function smooth(t)
-{
-    return 6*Math.pow(t, 5) - 15*Math.pow(t, 4) + 10*Math.pow(t, 3);
-}
-
 /**
  * 
  * @param {MouseEvent} event 
@@ -430,7 +195,7 @@ function mouseOver(event)
         let vertexX = vertex.currentCoords.x;
         let vertexY = vertex.currentCoords.y;
 
-        let distance = getDistance(mouseX, mouseY, vertexX, vertexY)
+        let distance = Utils.getDistance(mouseX, mouseY, vertexX, vertexY)
         if(distance < MOUSE_EFFECT_DISTANCE)
         {
             let slope = -(MOUSE_STRENGTH/MOUSE_EFFECT_DISTANCE)*distance + MOUSE_STRENGTH;
@@ -443,9 +208,6 @@ function mouseOver(event)
             vertex.mouseForceVector.strength = 0;
         }
     })
-
-
-
 }
 
 function updateState(timestamp, deltaTime)
@@ -513,6 +275,6 @@ let tris =
         new Triangle(vertices[4], vertices[6], vertices[8])
     ]
 
-perlin = new PerlinNoise();
+const perlin = new PerlinNoise(canvas.width, canvas.height, NOISE_GRID_SIZE, NOISE_TIME_SCALE);
 
 main(document.timeline.currentTime);
